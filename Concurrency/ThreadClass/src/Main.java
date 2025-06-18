@@ -29,6 +29,13 @@ public class Main {
             t1.start();
         }
 
+        Runnable r1 = new myRunnable(100);
+
+        Thread t1 = new Thread(r1);
+
+        t1.setDaemon(true);
+        t1.start();
+
 
 
     }
