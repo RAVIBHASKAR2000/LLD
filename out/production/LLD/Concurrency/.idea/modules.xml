@@ -4,6 +4,8 @@
     <modules>
       <module fileurl="file://$PROJECT_DIR$/Concurrency.iml" filepath="$PROJECT_DIR$/Concurrency.iml" />
       <module fileurl="file://$PROJECT_DIR$/Deadlock/Deadlock.iml" filepath="$PROJECT_DIR$/Deadlock/Deadlock.iml" />
+      <module fileurl="file://$PROJECT_DIR$/ExectorServiceEgample/ExectorServiceEgample.iml" filepath="$PROJECT_DIR$/ExectorServiceEgample/ExectorServiceEgample.iml" />
+      <module fileurl="file://$PROJECT_DIR$/ForkJoinPool/ForkJoinPool.iml" filepath="$PROJECT_DIR$/ForkJoinPool/ForkJoinPool.iml" />
     </modules>
   </component>
 </project>
