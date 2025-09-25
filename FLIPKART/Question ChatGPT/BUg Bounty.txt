@@ -1,0 +1,208 @@
+// This is a simplified in-memory implementation of the Flipkart Bug Bounty System.
+
+import java.util.*;
+import java.util.stream.Collectors;
+
+enum Role { ADMIN, AGENT }
+enum BugStatus {
+    OPEN, REPORT_REVIEW, REJECTED, ACKNOWLEDGED, BOUNTY_REVIEW, BOUNTY_PAID, CLOSED;
+
+    static boolean isValidTransition(BugStatus from, BugStatus to) {
+        return switch (from) {
+            case OPEN -> to == REPORT_REVIEW;
+            case REPORT_REVIEW -> to == REJECTED || to == ACKNOWLEDGED;
+            case REJECTED -> to == CLOSED;
+            case ACKNOWLEDGED -> to == BOUNTY_REVIEW;
+            case BOUNTY_REVIEW -> to == BOUNTY_PAID;
+            case BOUNTY_PAID -> to == CLOSED;
+            default -> false;
+        };
+    }
+}
+
+class User {
+    String name;
+    String email;
+    Role role;
+
+    public User(String name, String email, Role role) {
+        this.name = name;
+        this.email = email;
+        this.role = role;
+    }
+}
+
+class BugReport {
+    String title;
+    String description;
+    BugStatus status;
+    String severity;
+    int bountyAmount;
+    String reporterEmail;
+    User assignedUser;
+    Date createdTime;
+    Date closedTime;
+    List<String> comments = new ArrayList<>();
+    Map<BugStatus, Date> statusHistory = new LinkedHashMap<>();
+
+    public BugReport(String title, String description, String severity, String reporterEmail) {
+        this.title = title;
+        this.description = description;
+        this.severity = severity;
+        this.reporterEmail = reporterEmail;
+        this.status = BugStatus.OPEN;
+        this.createdTime = new Date();
+        statusHistory.put(BugStatus.OPEN, new Date());
+    }
+
+    public boolean isCompleted() {
+        return status == BugStatus.CLOSED;
+    }
+}
+
+class BugBountySystem {
+    Map<String, User> users = new HashMap<>();
+    Map<String, BugReport> reports = new HashMap<>();
+    User currentUser = null;
+
+    public void preloadUsers(List<User> userList) {
+        for (User user : userList) {
+            users.put(user.name.toLowerCase(), user);
+        }
+    }
+
+    public void login(String name) {
+        currentUser = users.get(name.toLowerCase());
+        if (currentUser == null) throw new RuntimeException("User not found");
+        System.out.println("Logged in as " + name);
+    }
+
+    public void logout() {
+        System.out.println("Logged out");
+        currentUser = null;
+    }
+
+    public void reportBug(BugReport bug) {
+        requireLogin();
+        reports.put(bug.title.toLowerCase(), bug);
+    }
+
+    public void assignBugReport(String title, String username) {
+        requireLogin();
+        BugReport bug = getReport(title);
+        User user = users.get(username.toLowerCase());
+        if (user == null) throw new RuntimeException("Assignee not found");
+        bug.assignedUser = user;
+    }
+
+    public void updateBugStatus(String title, String statusStr) {
+        requireLogin();
+        BugReport bug = getReport(title);
+        BugStatus newStatus = BugStatus.valueOf(statusStr.toUpperCase().replace(" ", "_"));
+        if (!bug.assignedUser.name.equals(currentUser.name))
+            throw new RuntimeException("You are not assigned to this bug");
+        if (!BugStatus.isValidTransition(bug.status, newStatus))
+            throw new RuntimeException("Invalid status transition from " + bug.status + " to " + newStatus);
+        bug.status = newStatus;
+        bug.statusHistory.put(newStatus, new Date());
+        if (newStatus == BugStatus.CLOSED) bug.closedTime = new Date();
+    }
+
+    public void updateBugReport(String title, Map<String, Object> updates) {
+        requireLogin();
+        BugReport bug = getReport(title);
+        if (updates.containsKey("bountyAmount")) {
+            bug.bountyAmount = (int) updates.get("bountyAmount");
+        }
+    }
+
+    public void addComment(String title, String comment) {
+        requireLogin();
+        getReport(title).comments.add(comment);
+    }
+
+    public void deleteBugReport(String title) {
+        requireLogin();
+        if (currentUser.role != Role.ADMIN) throw new RuntimeException("Only admin can delete bug reports");
+        reports.remove(title.toLowerCase());
+    }
+
+    public void listAllBugReports() {
+        requireLogin();
+        reports.values().forEach(this::printBug);
+    }
+
+    public void listAssignedReports() {
+        requireLogin();
+        reports.values().stream()
+            .filter(b -> b.assignedUser != null && b.assignedUser.name.equals(currentUser.name))
+            .forEach(this::printBug);
+    }
+
+    public void listAssignedAndCompletedReports() {
+        requireLogin();
+        reports.values().stream()
+            .filter(b -> b.assignedUser != null && b.assignedUser.name.equals(currentUser.name) && b.isCompleted())
+            .forEach(this::printBug);
+    }
+
+    public void listAssignedAndIncompleteReports() {
+        requireLogin();
+        reports.values().stream()
+            .filter(b -> b.assignedUser != null && b.assignedUser.name.equals(currentUser.name) && !b.isCompleted())
+            .forEach(this::printBug);
+    }
+
+    public void viewBugReportDetails(String title) {
+        requireLogin();
+        printBug(getReport(title));
+    }
+
+    private BugReport getReport(String title) {
+        BugReport bug = reports.get(title.toLowerCase());
+        if (bug == null) throw new RuntimeException("Bug report not found");
+        return bug;
+    }
+
+    private void requireLogin() {
+        if (currentUser == null) throw new RuntimeException("Login required");
+    }
+
+    private void printBug(BugReport bug) {
+        System.out.println("Bug Title: " + bug.title + ", Status: " + bug.status + ", Assigned To: " +
+                (bug.assignedUser != null ? bug.assignedUser.name : "None"));
+    }
+}
+
+// Driver to simulate test case
+class Driver {
+    public static void main(String[] args) {
+        BugBountySystem system = new BugBountySystem();
+        system.preloadUsers(List.of(
+            new User("user1", "u1@flipkart.com", Role.ADMIN),
+            new User("user2", "u2@flipkart.com", Role.AGENT)
+        ));
+
+        system.login("user1");
+        system.reportBug(new BugReport("Bug Title 1", "Bug Description 1", "P0", "reporter.b1@email.com"));
+        system.reportBug(new BugReport("Bug Title 2", "Bug Description 2", "P0", "reporter.b2@email.com"));
+        system.assignBugReport("Bug Title 1", "user1");
+        system.assignBugReport("Bug Title 2", "user2");
+        system.updateBugStatus("Bug Title 1", "Report Review");
+        system.updateBugStatus("Bug Title 1", "Acknowledged");
+        system.updateBugStatus("Bug Title 1", "Bounty Review");
+        system.updateBugReport("Bug Title 1", Map.of("bountyAmount", 1000));
+        system.addComment("Bug Title 1", "comment text 1");
+        system.deleteBugReport("Bug Title 2");
+        system.listAllBugReports();
+        system.listAssignedReports();
+        system.listAssignedAndCompletedReports();
+        system.listAssignedAndIncompleteReports();
+        system.viewBugReportDetails("Bug Title 1");
+        system.logout();
+
+        system.login("user2");
+        system.updateBugStatus("Bug Title 2", "Report Review"); // should fail (deleted)
+        system.logout();
+    }
+}
